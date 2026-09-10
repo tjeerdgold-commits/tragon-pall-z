@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './GameArena.css';
+import SoundManager from '../utils/SoundManager';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'ws://localhost:3001';
 
-function GameArena({ arenaId, onBack }) {
+function GameArena({ arenaId, character, onBack }) {
   const [gameState, setGameState] = useState({
     playerId: null,
     players: [],
@@ -12,18 +13,15 @@ function GameArena({ arenaId, onBack }) {
   });
 
   const [controls, setControls] = useState({
-    charging: false,
-    chargeTime: 0,
     defending: false,
     lastActionTime: 0
   });
 
+  const soundManager = useRef(new SoundManager());
   const ws = useRef(null);
   const canvasRef = useRef(null);
-  const chargeIntervalRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  // Connect to WebSocket
   useEffect(() => {
     ws.current = new WebSocket(SERVER_URL);
 
@@ -31,7 +29,8 @@ function GameArena({ arenaId, onBack }) {
       console.log('Connected to server');
       ws.current.send(JSON.stringify({
         type: 'JOIN_ARENA',
-        arenaId: arenaId
+        arenaId: arenaId,
+        character: character
       }));
     };
 
@@ -53,11 +52,18 @@ function GameArena({ arenaId, onBack }) {
             energyBalls: message.balls
           }));
           break;
+        case 'ENERGY_BALL_FIRED':
+          soundManager.current.playShoot(message.ball.attackType);
+          break;
         case 'PLAYER_HIT':
-          console.log(`Player ${message.playerId} took ${message.damage} damage!`);
+          soundManager.current.playHit();
+          console.log(`Hit: ${message.damage.toFixed(1)} damage`);
+          break;
+        case 'PLAYER_DEFENDING':
+          soundManager.current.playDefend();
           break;
         case 'PLAYER_DEFEATED':
-          console.log(`Player ${message.playerId} defeated!`);
+          soundManager.current.playDefeat();
           break;
         default:
           break;
@@ -75,88 +81,37 @@ function GameArena({ arenaId, onBack }) {
     return () => {
       if (ws.current) ws.current.close();
     };
-  }, [arenaId]);
+  }, [arenaId, character]);
 
-  // Handle charge button
-  const handleChargeStart = () => {
-    if (controls.defending) return;
-    setControls(prev => ({ ...prev, charging: true, chargeTime: 0 }));
+  const handleAttack = (attackType) => {
+    if (controls.defending || !gameState.myPlayer || !ws.current) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
     
-    chargeIntervalRef.current = setInterval(() => {
-      setControls(prev => ({
-        ...prev,
-        chargeTime: Math.min(prev.chargeTime + 10, 3000)
-      }));
-    }, 10);
-  };
-
-  const handleChargeEnd = () => {
-    if (chargeIntervalRef.current) {
-      clearInterval(chargeIntervalRef.current);
-    }
-
-    const power = Math.min(controls.chargeTime / 3000, 1); // Normalize to 0-1
-    if (power > 0 && ws.current) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        
-        ws.current.send(JSON.stringify({
-          type: 'SHOOT',
-          targetX: centerX,
-          targetY: centerY,
-          power: power
-        }));
-      }
-    }
-
-    setControls(prev => ({
-      ...prev,
-      charging: false,
-      chargeTime: 0,
-      lastActionTime: Date.now()
+    ws.current.send(JSON.stringify({
+      type: 'SHOOT',
+      targetX: centerX,
+      targetY: centerY,
+      attackType: attackType
     }));
   };
 
-  // Handle defend
   const handleDefend = () => {
-    if (controls.charging) return;
+    if (!gameState.myPlayer || !ws.current) return;
+    
     setControls(prev => ({ ...prev, defending: true, lastActionTime: Date.now() }));
     
-    if (ws.current) {
-      ws.current.send(JSON.stringify({ type: 'DEFEND' }));
-    }
+    ws.current.send(JSON.stringify({ type: 'DEFEND' }));
 
     setTimeout(() => {
       setControls(prev => ({ ...prev, defending: false }));
     }, 800);
   };
 
-  // Handle canvas click/swipe
-  const handleCanvasClick = (e) => {
-    if (controls.defending || !gameState.myPlayer) return;
-
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const power = Math.min(controls.chargeTime / 3000, 1);
-    
-    if (ws.current) {
-      ws.current.send(JSON.stringify({
-        type: 'SHOOT',
-        targetX: x,
-        targetY: y,
-        power: Math.max(power, 0.3)
-      }));
-    }
-
-    handleChargeEnd();
-  };
-
-  // Handle position update
   const handleMouseMove = (e) => {
     if (!gameState.myPlayer || !ws.current) return;
 
@@ -180,11 +135,9 @@ function GameArena({ arenaId, onBack }) {
     const ctx = canvas.getContext('2d');
     
     const draw = () => {
-      // Clear canvas
       ctx.fillStyle = 'rgba(26, 26, 46, 0.8)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw grid
       ctx.strokeStyle = 'rgba(0, 191, 255, 0.1)';
       ctx.lineWidth = 1;
       for (let i = 0; i < canvas.width; i += 50) {
@@ -202,17 +155,21 @@ function GameArena({ arenaId, onBack }) {
 
       // Draw energy balls
       gameState.energyBalls.forEach(ball => {
+        let ballColor = '#ffd700';
+        if (ball.attackType === 'light') ballColor = '#87ceeb';
+        if (ball.attackType === 'medium') ballColor = '#ffd700';
+        if (ball.attackType === 'heavy') ballColor = '#ff6b35';
+
         const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 15);
-        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
+        gradient.addColorStop(0, ballColor);
         gradient.addColorStop(1, 'rgba(255, 107, 53, 0.2)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, 15, 0, Math.PI * 2);
         ctx.fill();
 
-        // Aura
-        ctx.strokeStyle = `rgba(255, 107, 53, ${0.5 * (1 - ball.power)})`;
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = ballColor;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, 20, 0, Math.PI * 2);
         ctx.stroke();
@@ -222,13 +179,11 @@ function GameArena({ arenaId, onBack }) {
       gameState.players.forEach(player => {
         if (!player) return;
 
-        // Draw player circle
         ctx.fillStyle = player.color;
         ctx.beginPath();
         ctx.arc(player.x, player.y, 20, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw aura if defending
         if (player.shieldActive) {
           ctx.strokeStyle = 'rgba(0, 191, 255, 0.8)';
           ctx.lineWidth = 3;
@@ -237,20 +192,12 @@ function GameArena({ arenaId, onBack }) {
           ctx.stroke();
         }
 
-        // Draw HP bar
         ctx.fillStyle = '#333';
         ctx.fillRect(player.x - 25, player.y - 45, 50, 8);
         
         const hpPercent = Math.max(0, player.hp / 100);
         ctx.fillStyle = hpPercent > 0.3 ? '#00ff00' : '#ff0000';
         ctx.fillRect(player.x - 25, player.y - 45, 50 * hpPercent, 8);
-
-        // Draw state
-        ctx.fillStyle = '#fff';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        const stateText = player.shieldActive ? '🛡️' : (player.state === 'attacking' ? '⚔️' : '');
-        ctx.fillText(stateText, player.x, player.y + 40);
       });
 
       // Draw UI
@@ -259,17 +206,12 @@ function GameArena({ arenaId, onBack }) {
         ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'left';
         ctx.fillText(`HP: ${gameState.myPlayer.hp}`, 20, 40);
-
-        if (controls.charging) {
-          ctx.fillStyle = '#ff6b35';
-          ctx.font = 'bold 16px Arial';
-          ctx.fillText(`Charging: ${(controls.chargeTime / 30).toFixed(0)}%`, 20, 70);
-        }
+        ctx.fillText(`Wins: ${gameState.myPlayer.wins} | Losses: ${gameState.myPlayer.losses}`, 20, 70);
 
         if (controls.defending) {
           ctx.fillStyle = '#00bfff';
           ctx.font = 'bold 16px Arial';
-          ctx.fillText('DEFENDING', 20, 70);
+          ctx.fillText('DEFENDING', 20, 100);
         }
       }
 
@@ -291,29 +233,42 @@ function GameArena({ arenaId, onBack }) {
         ref={canvasRef}
         width={window.innerWidth}
         height={window.innerHeight}
-        onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
         className="game-canvas"
       />
 
-      <div className="controls">
+      <div className="controls-bottom">
         <button
-          className="btn-control btn-assault"
-          onMouseDown={handleChargeStart}
-          onMouseUp={handleChargeEnd}
-          onTouchStart={handleChargeStart}
-          onTouchEnd={handleChargeEnd}
+          className="btn-attack btn-light"
+          onMouseDown={() => handleAttack('light')}
+          onTouchStart={() => handleAttack('light')}
         >
-          ⚔️ ASSAULT
+          🔵 Light
         </button>
         <button
-          className="btn-control btn-defend"
-          onMouseDown={handleDefend}
-          disabled={controls.defending}
+          className="btn-attack btn-medium"
+          onMouseDown={() => handleAttack('medium')}
+          onTouchStart={() => handleAttack('medium')}
         >
-          🛡️ DEFEND
+          🟡 Medium
+        </button>
+        <button
+          className="btn-attack btn-heavy"
+          onMouseDown={() => handleAttack('heavy')}
+          onTouchStart={() => handleAttack('heavy')}
+        >
+          🔴 Heavy
         </button>
       </div>
+
+      <button 
+        className="btn-defend-center"
+        onMouseDown={handleDefend}
+        disabled={controls.defending}
+        title="Defense"
+      >
+        🛡️
+      </button>
 
       <button className="btn-back" onClick={onBack}>
         ← Back

@@ -1,16 +1,36 @@
 import React, { useState } from 'react';
+import CharacterSelect from './CharacterSelect';
+import RankingsList from './RankingsList';
 import './JoinArena.css';
 
 function JoinArena({ onJoin }) {
+  const [stage, setStage] = useState('menu'); // menu, character, rankings
   const [arenaId, setArenaId] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
+
+  const handleCharacterSelect = (character) => {
+    setSelectedCharacter(character);
+    setStage('arena');
+  };
 
   const handleJoin = () => {
-    const id = isCreating ? `arena-${Date.now()}` : arenaId;
-    if (id.trim()) {
-      onJoin(id);
+    const id = arenaId.trim() || `arena-${Date.now()}`;
+    if (selectedCharacter) {
+      onJoin(id, selectedCharacter);
     }
   };
+
+  if (stage === 'character') {
+    return <CharacterSelect onSelectCharacter={handleCharacterSelect} />;
+  }
+
+  if (stage === 'rankings') {
+    return (
+      <div className="join-arena">
+        <RankingsList onBack={() => setStage('menu')} />
+      </div>
+    );
+  }
 
   return (
     <div className="join-arena">
@@ -18,40 +38,30 @@ function JoinArena({ onJoin }) {
         <h1 className="title">🐉 TRAGON PALL Z 🐉</h1>
         <p className="subtitle">Real-time Energy Ball Battles</p>
         
-        <div className="input-group">
-          <input
-            type="text"
-            placeholder="Enter Arena ID or leave blank to create"
-            value={arenaId}
-            onChange={(e) => setArenaId(e.target.value)}
-            disabled={isCreating}
-            className="arena-input"
-          />
-        </div>
-
-        <div className="button-group">
+        <div className="menu-buttons">
           <button 
             className="btn btn-primary"
-            onClick={() => {
-              if (isCreating) {
-                handleJoin();
-              } else {
-                handleJoin();
-              }
-            }}
+            onClick={() => setStage('character')}
           >
-            {isCreating || !arenaId ? '⚡ Create New Arena' : '⚡ Join Arena'}
+            ⚡ Play Now
+          </button>
+          <button 
+            className="btn btn-secondary"
+            onClick={() => setStage('rankings')}
+          >
+            🏆 Rankings
           </button>
         </div>
 
         <div className="instructions">
           <h3>How to Play:</h3>
           <ul>
-            <li>🎯 Swipe toward opponent to shoot energy balls</li>
-            <li>🛡️ Press DEFEND to block incoming attacks (cooldown applies)</li>
-            <li>⚔️ Hold ASSAULT to charge power (makes you vulnerable)</li>
-            <li>🏃 Move in real life to dodge incoming energy balls</li>
-            <li>💪 First to 0 HP loses</li>
+            <li>🔴 Light Attack: Quick and safe</li>
+            <li>🟡 Medium Attack: Balanced power</li>
+            <li>🔴 Heavy Attack: Maximum damage</li>
+            <li>🛡️ Defend: Block incoming attacks (center)</li>
+            <li>🏃 Move: Physical position matters</li>
+            <li>💪 Manage cooldowns strategically</li>
           </ul>
         </div>
       </div>

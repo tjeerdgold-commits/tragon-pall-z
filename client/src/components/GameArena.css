@@ -13,61 +13,95 @@
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
 }
 
-.controls {
+.controls-bottom {
   position: absolute;
   bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 20px;
+  gap: 15px;
   z-index: 100;
 }
 
-.btn-control {
-  padding: 20px 40px;
-  font-size: 1.2em;
+.btn-attack {
+  padding: 15px 25px;
+  font-size: 1em;
   font-weight: bold;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   text-transform: uppercase;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
   user-select: none;
   touch-action: manipulation;
 }
 
-.btn-assault {
-  background: linear-gradient(45deg, #ff6b35, #ffd700);
-  color: #000;
-  box-shadow: 0 0 30px rgba(255, 107, 53, 0.6);
-}
-
-.btn-assault:active {
-  transform: scale(0.95);
-  box-shadow: 0 0 50px rgba(255, 107, 53, 1);
-}
-
-.btn-assault:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-defend {
-  background: linear-gradient(45deg, #00bfff, #4169e1);
+.btn-light {
+  background: linear-gradient(45deg, #87ceeb, #4169e1);
   color: #fff;
-  box-shadow: 0 0 30px rgba(0, 191, 255, 0.6);
+  box-shadow: 0 0 20px rgba(65, 105, 225, 0.6);
 }
 
-.btn-defend:active {
+.btn-light:active {
   transform: scale(0.95);
+  box-shadow: 0 0 30px rgba(65, 105, 225, 1);
+}
+
+.btn-medium {
+  background: linear-gradient(45deg, #ffd700, #ff8c00);
+  color: #000;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+}
+
+.btn-medium:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 30px rgba(255, 215, 0, 1);
+}
+
+.btn-heavy {
+  background: linear-gradient(45deg, #ff6b35, #ff0000);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.6);
+}
+
+.btn-heavy:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 30px rgba(255, 107, 53, 1);
+}
+
+.btn-defend-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #00bfff, #4169e1);
+  border: 3px solid #ffd700;
+  font-size: 2.5em;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 30px rgba(0, 191, 255, 0.6);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-defend-center:hover:not(:disabled) {
+  transform: translate(-50%, -50%) scale(1.1);
   box-shadow: 0 0 50px rgba(0, 191, 255, 1);
 }
 
-.btn-defend:disabled {
+.btn-defend-center:active:not(:disabled) {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
+.btn-defend-center:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: 0 0 20px rgba(0, 191, 255, 0.3);
 }
 
 .btn-back {
@@ -91,13 +125,19 @@
 }
 
 @media (max-width: 768px) {
-  .btn-control {
-    padding: 15px 25px;
-    font-size: 1em;
+  .btn-attack {
+    padding: 12px 18px;
+    font-size: 0.8em;
   }
 
-  .controls {
+  .controls-bottom {
     bottom: 20px;
     gap: 10px;
+  }
+
+  .btn-defend-center {
+    width: 70px;
+    height: 70px;
+    font-size: 2em;
   }
 }

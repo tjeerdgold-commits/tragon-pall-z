@@ -12,7 +12,7 @@
   border: 3px solid #ff6b35;
   border-radius: 10px;
   padding: 40px;
-  max-width: 500px;
+  max-width: 600px;
   text-align: center;
   box-shadow: 0 0 30px rgba(255, 107, 53, 0.3);
 }
@@ -24,7 +24,6 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
   animation: glow 2s ease-in-out infinite;
 }
 
@@ -40,33 +39,10 @@
   font-weight: bold;
 }
 
-.input-group {
-  margin: 20px 0;
-}
-
-.arena-input {
-  width: 100%;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid #00bfff;
-  border-radius: 5px;
-  color: #fff;
-  font-size: 1em;
-  text-align: center;
-  transition: all 0.3s;
-}
-
-.arena-input:focus {
-  outline: none;
-  border-color: #ff6b35;
-  box-shadow: 0 0 15px rgba(255, 107, 53, 0.5);
-}
-
-.arena-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.button-group {
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
   margin: 30px 0;
 }
 
@@ -90,6 +66,17 @@
 .btn-primary:hover {
   transform: scale(1.05);
   box-shadow: 0 0 30px rgba(255, 107, 53, 0.8);
+}
+
+.btn-secondary {
+  background: linear-gradient(45deg, #4169e1, #00bfff);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+}
+
+.btn-secondary:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(0, 191, 255, 0.8);
 }
 
 .instructions {

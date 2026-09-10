@@ -12,17 +12,24 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // Game state
-const arenas = new Map(); // arena_id -> { players: Map, energyBalls: [] }
-const players = new Map(); // player_id -> { ws, arenaId, hp, x, y, state }
+const arenas = new Map();
+const players = new Map();
+const rankings = new Map(); // player_id -> { wins, losses, rank }
 
 const ARENA_SIZE = 1000;
 const PLAYER_MAX_HP = 100;
 const ENERGY_BALL_SPEED = 5;
-const ATTACK_COOLDOWN = 500; // ms
-const DEFENSE_COOLDOWN = 800; // ms
-const ENERGY_BALL_LIFETIME = 3000; // ms
+const ATTACK_COOLDOWN = 500;
+const DEFENSE_COOLDOWN = 800;
+const ENERGY_BALL_LIFETIME = 3000;
 
-// Create or join arena
+// Attack types and their power multipliers
+const ATTACK_TYPES = {
+  light: { power: 0.3, cooldown: 300 },
+  medium: { power: 0.6, cooldown: 400 },
+  heavy: { power: 1.0, cooldown: 600 }
+};
+
 wss.on('connection', (ws) => {
   const playerId = uuidv4();
   
@@ -32,7 +39,7 @@ wss.on('connection', (ws) => {
       
       switch (message.type) {
         case 'JOIN_ARENA':
-          handleJoinArena(playerId, ws, message.arenaId);
+          handleJoinArena(playerId, ws, message.arenaId, message.character);
           break;
         case 'SHOOT':
           handleShoot(playerId, message);
@@ -42,6 +49,9 @@ wss.on('connection', (ws) => {
           break;
         case 'POSITION':
           handlePositionUpdate(playerId, message);
+          break;
+        case 'GET_RANKINGS':
+          handleGetRankings(ws);
           break;
       }
     } catch (err) {
@@ -54,8 +64,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-function handleJoinArena(playerId, ws, arenaId) {
-  // Create arena if doesn't exist
+function handleJoinArena(playerId, ws, arenaId, character) {
   if (!arenas.has(arenaId)) {
     arenas.set(arenaId, {
       players: new Map(),
@@ -75,18 +84,19 @@ function handleJoinArena(playerId, ws, arenaId) {
     y: Math.random() * ARENA_SIZE,
     vx: 0,
     vy: 0,
-    state: 'idle', // idle, attacking, defending
+    state: 'idle',
     lastAttackTime: 0,
     lastDefenseTime: 0,
     shieldActive: false,
-    character: 'warrior', // default character
-    color: `hsl(${Math.random() * 360}, 70%, 50%)`
+    character: character || 'man',
+    color: character === 'woman' ? '#ff69b4' : '#4169e1',
+    wins: rankings.get(playerId)?.wins || 0,
+    losses: rankings.get(playerId)?.losses || 0
   };
 
   arena.players.set(playerId, newPlayer);
   players.set(playerId, newPlayer);
 
-  // Send join confirmation
   ws.send(JSON.stringify({
     type: 'JOINED',
     playerId: playerId,
@@ -96,11 +106,13 @@ function handleJoinArena(playerId, ws, arenaId) {
       hp: newPlayer.hp,
       x: newPlayer.x,
       y: newPlayer.y,
-      color: newPlayer.color
+      color: newPlayer.color,
+      character: newPlayer.character,
+      wins: newPlayer.wins,
+      losses: newPlayer.losses
     }
   }));
 
-  // Broadcast player joined to arena
   broadcastToArena(arenaId, {
     type: 'PLAYER_JOINED',
     player: {
@@ -108,7 +120,8 @@ function handleJoinArena(playerId, ws, arenaId) {
       hp: newPlayer.hp,
       x: newPlayer.x,
       y: newPlayer.y,
-      color: newPlayer.color
+      color: newPlayer.color,
+      character: newPlayer.character
     }
   });
 }
@@ -117,21 +130,24 @@ function handleShoot(playerId, message) {
   const player = players.get(playerId);
   if (!player) return;
 
+  const attackType = message.attackType || 'medium';
+  const attackData = ATTACK_TYPES[attackType];
+  
   const now = Date.now();
-  if (now - player.lastAttackTime < ATTACK_COOLDOWN) return;
+  if (now - player.lastAttackTime < attackData.cooldown) return;
   if (player.state === 'defending') return;
 
   player.lastAttackTime = now;
   player.state = 'attacking';
 
-  // Create energy ball
   const targetX = message.targetX;
   const targetY = message.targetY;
   const distance = Math.sqrt(Math.pow(targetX - player.x, 2) + Math.pow(targetY - player.y, 2));
   
+  if (distance === 0) return;
+  
   const vx = (targetX - player.x) / distance * ENERGY_BALL_SPEED;
   const vy = (targetY - player.y) / distance * ENERGY_BALL_SPEED;
-  const power = message.power || 1; // 0-1 based on charge time
 
   const energyBall = {
     id: uuidv4(),
@@ -140,23 +156,22 @@ function handleShoot(playerId, message) {
     y: player.y,
     vx: vx,
     vy: vy,
-    power: power,
+    power: attackData.power,
+    attackType: attackType,
     createdAt: now
   };
 
   const arena = arenas.get(player.arenaId);
   arena.energyBalls.push(energyBall);
 
-  // Broadcast energy ball
   broadcastToArena(player.arenaId, {
     type: 'ENERGY_BALL_FIRED',
     ball: energyBall
   });
 
-  // Reset to idle after cooldown
   setTimeout(() => {
     if (player.state === 'attacking') player.state = 'idle';
-  }, ATTACK_COOLDOWN);
+  }, attackData.cooldown);
 }
 
 function handleDefend(playerId) {
@@ -176,7 +191,6 @@ function handleDefend(playerId) {
     playerId: playerId
   });
 
-  // Reset shield after cooldown
   setTimeout(() => {
     player.shieldActive = false;
     if (player.state === 'defending') player.state = 'idle';
@@ -191,6 +205,18 @@ function handlePositionUpdate(playerId, message) {
   player.y = Math.max(0, Math.min(ARENA_SIZE, message.y));
 }
 
+function handleGetRankings(ws) {
+  const rankingsList = Array.from(rankings.entries())
+    .map(([id, data]) => ({ id, ...data }))
+    .sort((a, b) => (b.wins - b.losses) - (a.wins - a.losses))
+    .slice(0, 10);
+  
+  ws.send(JSON.stringify({
+    type: 'RANKINGS',
+    rankings: rankingsList
+  }));
+}
+
 function handlePlayerDisconnect(playerId) {
   const player = players.get(playerId);
   if (!player) return;
@@ -203,7 +229,6 @@ function handlePlayerDisconnect(playerId) {
       playerId: playerId
     });
 
-    // Clean up empty arenas
     if (arena.players.size === 0) {
       clearInterval(arena.gameLoopInterval);
       arenas.delete(player.arenaId);
@@ -218,14 +243,12 @@ function startGameLoop(arenaId) {
   if (!arena) return;
 
   arena.gameLoopInterval = setInterval(() => {
-    // Update energy balls
     const ballsToRemove = [];
     
     arena.energyBalls.forEach((ball, index) => {
       ball.x += ball.vx;
       ball.y += ball.vy;
 
-      // Check if out of bounds or too old
       if (
         ball.x < 0 || ball.x > ARENA_SIZE ||
         ball.y < 0 || ball.y > ARENA_SIZE ||
@@ -235,20 +258,18 @@ function startGameLoop(arenaId) {
         return;
       }
 
-      // Check collision with players
       arena.players.forEach((player) => {
         if (player.id === ball.shooterId) return;
 
         const distance = Math.sqrt(Math.pow(ball.x - player.x, 2) + Math.pow(ball.y - player.y, 2));
-        if (distance < 30) { // Hit radius
+        if (distance < 30) {
           let damage = 10 * ball.power;
 
           if (player.shieldActive) {
-            // Shield blocks weak/medium attacks
             if (ball.power > 0.7) {
-              damage = damage * 0.5; // Shield-breaking attacks do half damage
+              damage = damage * 0.5;
             } else {
-              damage = 0; // Blocked
+              damage = 0;
             }
           }
 
@@ -259,11 +280,27 @@ function startGameLoop(arenaId) {
             type: 'PLAYER_HIT',
             playerId: player.id,
             damage: damage,
-            hp: Math.max(0, player.hp)
+            hp: Math.max(0, player.hp),
+            attackType: ball.attackType
           });
 
-          // Check if player is dead
           if (player.hp <= 0) {
+            const winner = arena.players.get(ball.shooterId);
+            if (winner) {
+              winner.wins = (winner.wins || 0) + 1;
+              player.losses = (player.losses || 0) + 1;
+              
+              if (!rankings.has(ball.shooterId)) {
+                rankings.set(ball.shooterId, { wins: 0, losses: 0 });
+              }
+              if (!rankings.has(player.id)) {
+                rankings.set(player.id, { wins: 0, losses: 0 });
+              }
+              
+              rankings.get(ball.shooterId).wins++;
+              rankings.get(player.id).losses++;
+            }
+
             broadcastToArena(arenaId, {
               type: 'PLAYER_DEFEATED',
               playerId: player.id,
@@ -276,11 +313,9 @@ function startGameLoop(arenaId) {
       });
     });
 
-    // Remove dead balls
     ballsToRemove.sort((a, b) => b - a);
     ballsToRemove.forEach(idx => arena.energyBalls.splice(idx, 1));
 
-    // Broadcast game state
     broadcastToArena(arenaId, {
       type: 'GAME_STATE',
       balls: arena.energyBalls,
@@ -291,10 +326,13 @@ function startGameLoop(arenaId) {
         y: p.y,
         state: p.state,
         shieldActive: p.shieldActive,
-        color: p.color
+        color: p.color,
+        character: p.character,
+        wins: p.wins,
+        losses: p.losses
       }))
     });
-  }, 16); // ~60 FPS
+  }, 16);
 }
 
 function broadcastToArena(arenaId, message) {
@@ -309,9 +347,16 @@ function broadcastToArena(arenaId, message) {
   });
 }
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', arenas: arenas.size });
+});
+
+app.get('/rankings', (req, res) => {
+  const rankingsList = Array.from(rankings.entries())
+    .map(([id, data]) => ({ id, ...data }))
+    .sort((a, b) => (b.wins - b.losses) - (a.wins - a.losses))
+    .slice(0, 10);
+  res.json(rankingsList);
 });
 
 const PORT = process.env.PORT || 3001;
