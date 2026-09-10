@@ -1,0 +1,103 @@
+.game-arena {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.controls {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  z-index: 100;
+}
+
+.btn-control {
+  padding: 20px 40px;
+  font-size: 1.2em;
+  font-weight: bold;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.btn-assault {
+  background: linear-gradient(45deg, #ff6b35, #ffd700);
+  color: #000;
+  box-shadow: 0 0 30px rgba(255, 107, 53, 0.6);
+}
+
+.btn-assault:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 50px rgba(255, 107, 53, 1);
+}
+
+.btn-assault:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-defend {
+  background: linear-gradient(45deg, #00bfff, #4169e1);
+  color: #fff;
+  box-shadow: 0 0 30px rgba(0, 191, 255, 0.6);
+}
+
+.btn-defend:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 50px rgba(0, 191, 255, 1);
+}
+
+.btn-defend:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: 0 0 20px rgba(0, 191, 255, 0.3);
+}
+
+.btn-back {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid #ffd700;
+  color: #ffd700;
+  font-weight: bold;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  z-index: 100;
+}
+
+.btn-back:hover {
+  background: rgba(255, 215, 0, 0.1);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+  .btn-control {
+    padding: 15px 25px;
+    font-size: 1em;
+  }
+
+  .controls {
+    bottom: 20px;
+    gap: 10px;
+  }
+}
